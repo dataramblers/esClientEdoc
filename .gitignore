@@ -1,0 +1,6 @@
+edoc_flattened.all.json
+edoc_nested.all.json
+target
+./idea
+*.iml
+
