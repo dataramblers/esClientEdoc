@@ -3,11 +3,15 @@ package ch.swissbib.data.tools.es;
 import com.fasterxml.jackson.core.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.commons.cli.*;
 import org.apache.http.entity.ContentType;
 import org.apache.http.nio.entity.NStringEntity;
 import org.elasticsearch.client.Response;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -41,8 +45,12 @@ public class EdocContent
 
             String scrollId = wholeResponse.get("_scroll_id").toString();
             Integer from = 10;
+            //int i = 0;
+            boolean smallOutput = userArgs.get("endpoint").equalsIgnoreCase("edoc_nested") &&  Boolean.valueOf( userArgs.get("concise"));
+
             while (true) {
-                if (printWhenAvailable(wholeResponse)) {
+
+                if (smallOutput ? printWhenAvailableSmall(wholeResponse) : printWhenAvailable(wholeResponse) ) {
                     response = restWrapper.getRestClient().
                             performRequest("GET", webApp + "/_search/scroll",
                                     Collections.<String, String>emptyMap(),
@@ -52,8 +60,9 @@ public class EdocContent
                 } else {
                     break;
                 }
+                //i++;
+                //System.out.println(i);
             }
-
 
             restWrapper.close();
 
@@ -86,6 +95,7 @@ public class EdocContent
 
         args.put("app", cmd.getOptionValue("app","/es"));
 
+        args.put("concise", cmd.hasOption("concise") ? "true" : "false");
 
 
         return args;
@@ -127,6 +137,9 @@ public class EdocContent
         o.setRequired(false);
         options.addOption(o);
 
+        o = new Option("c","concise",false,"concise (small) outputput for Hackathon");
+        o.setRequired(false);
+        options.addOption(o);
 
         return options;
 
@@ -190,6 +203,7 @@ public class EdocContent
     }
 
     private static boolean printWhenAvailable (JsonNode node) {
+
         JsonNode allhits = node.findPath("hits").findPath("hits");
         Iterator<JsonNode> singleHits = allhits.elements();
         boolean available = false;
@@ -199,6 +213,95 @@ public class EdocContent
             System.out.println(hit.get("_source").toString());
         }
         return available;
+
     }
+
+
+    private static boolean printWhenAvailableSmall (JsonNode node) {
+        JsonNode allhits = node.findPath("hits").findPath("hits");
+        Iterator<JsonNode> singleHits = allhits.elements();
+        boolean available = false;
+
+        ObjectMapper mapper = new ObjectMapper();
+        while (singleHits.hasNext()) {
+            ObjectNode newRoot = mapper.createObjectNode();
+            available = true;
+            JsonNode _source = singleHits.next().get("_source");
+            checkAndAddArrayStructure(newRoot,_source,"creators",mapper);
+            checkAndAddArrayStructure(newRoot,_source,"editors",mapper);
+            checkAndAddKeyValue(newRoot,_source,"title");
+            checkAndAddKeyValue(newRoot,_source,"isbn");
+            checkAndAddKeyValue(newRoot,_source,"isbn_e");
+            checkAndAddKeyValue(newRoot,_source,"issn");
+            checkAndAddKeyValue(newRoot,_source,"issn_e");
+            checkAndAddKeyValue(newRoot,_source,"eprintid");
+            checkAndPutIdNumber(newRoot,_source);
+            System.out.println(newRoot.toString());
+        }
+        return available;
+    }
+
+
+
+
+
+
+    private static void checkAndAddArrayStructure(ObjectNode root, JsonNode toBeChecked,
+                                     String fieldName, ObjectMapper mapper) {
+        if (toBeChecked.has(fieldName)) {
+            ArrayNode newArrayStructure = root.putArray(fieldName);
+            Iterator<JsonNode> iElements = toBeChecked.findPath(fieldName).elements();
+            while (iElements.hasNext()) {
+                JsonNode cN = iElements.next();
+                ObjectNode oN = mapper.createObjectNode();
+                if (cN.get("name").has("family")) {
+                    oN.put("family", cN.get("name").get("family").textValue());
+                } else {
+                    oN.put("family", "");
+                }
+                if (cN.get("name").has("given")) {
+                    oN.put("given", cN.get("name").get("given").textValue());
+                } else {
+                    oN.put("given", "");
+                }
+                newArrayStructure.add(oN);
+            }
+        }
+
+    }
+
+    private static void checkAndAddKeyValue(ObjectNode root, JsonNode toBeChecked,
+                                                  String fieldName) {
+        if (toBeChecked.has(fieldName) && toBeChecked.get(fieldName).textValue() != null) {
+            root.put(fieldName,toBeChecked.get(fieldName).textValue());
+        }
+
+    }
+
+    private static void checkAndPutIdNumber(ObjectNode root, JsonNode toBeChecked) {
+
+        ArrayList<JsonNode> nodesList = new ArrayList<>();
+        if (toBeChecked.has("id_number")) {
+            Iterator<JsonNode> iIds = toBeChecked.get("id_number").elements();
+            while (iIds.hasNext()) {
+                try {
+                    JsonNode id = iIds.next();
+                    if (null != id && id.has("type") && null != id.get("type") &&
+                            id.has("id") && null != id.get("id").asText()) {
+                        if (id.get("type").asText().equalsIgnoreCase("doi")) {
+                                root.put("doi", id.get("id").asText());
+                        } else if (id.get("type").asText().equalsIgnoreCase("pmid")) {
+                                root.put("pmid", id.get("id").asText());
+                        }
+                    }
+                } catch (Exception ex) {
+                    System.err.println(ex.getLocalizedMessage());
+                }
+            }
+
+        }
+
+    }
+
 
 }
