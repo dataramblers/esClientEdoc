@@ -3,4 +3,5 @@ edoc_nested.all.json
 target
 ./idea
 *.iml
+data/edoc_*
 
