@@ -229,12 +229,12 @@ public class EdocContent
             JsonNode _source = singleHits.next().get("_source");
             checkAndAddArrayStructure(newRoot,_source,"creators",mapper);
             checkAndAddArrayStructure(newRoot,_source,"editors",mapper);
-            checkAndAddKeyValue(newRoot,_source,"title");
-            checkAndAddKeyValue(newRoot,_source,"isbn");
-            checkAndAddKeyValue(newRoot,_source,"isbn_e");
-            checkAndAddKeyValue(newRoot,_source,"issn");
-            checkAndAddKeyValue(newRoot,_source,"issn_e");
-            checkAndAddKeyValue(newRoot,_source,"eprintid");
+            checkAndAddKeyValue(newRoot,_source,"title","string");
+            checkAndAddKeyValue(newRoot,_source,"isbn","string");
+            checkAndAddKeyValue(newRoot,_source,"isbn_e","string");
+            checkAndAddKeyValue(newRoot,_source,"issn","string");
+            checkAndAddKeyValue(newRoot,_source,"issn_e","string");
+            checkAndAddKeyValue(newRoot,_source,"eprintid","int");
             checkAndPutIdNumber(newRoot,_source);
             System.out.println(newRoot.toString());
         }
@@ -271,9 +271,13 @@ public class EdocContent
     }
 
     private static void checkAndAddKeyValue(ObjectNode root, JsonNode toBeChecked,
-                                                  String fieldName) {
-        if (toBeChecked.has(fieldName) && toBeChecked.get(fieldName).textValue() != null) {
+                                                  String fieldName,
+                                                    String type) {
+
+        if (type.equalsIgnoreCase("string") && toBeChecked.has(fieldName) && toBeChecked.get(fieldName).textValue() != null) {
             root.put(fieldName,toBeChecked.get(fieldName).textValue());
+        } else if (type.equalsIgnoreCase("int") && toBeChecked.has(fieldName) ) {
+            root.put(fieldName,toBeChecked.get(fieldName).asInt());
         }
 
     }
